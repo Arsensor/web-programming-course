@@ -42,6 +42,18 @@ export type ShortTextAnswer = {
 
 export type Answer = SingleChoiceAnswer | ShortTextAnswer;
 
+export type AttemptStatus = "in-progress" | "submitted";
+
+export type AttemptState = {
+  currentIndex: number;
+  answers: Answer[];
+  status: AttemptStatus;
+};
+
+export type FormEvent =
+  | { type: "choose-option"; taskId: string; optionId: string }
+  | { type: "change-text"; taskId: string; text: string };
+
 export type Progress = {
   filled: number;
   total: number;
@@ -61,12 +73,21 @@ export function filterTasksByTopic(
   return trainingSet.tasks.filter((task) => task.topic === topic);
 }
 
-function isAnswerFilled(answer: Answer): boolean {
-  if (answer.kind === "single-choice") {
-    return true;
+export function getAnswer(
+  answers: Answer[],
+  taskId: string
+): Answer | undefined {
+  return answers.find((item) => item.taskId === taskId);
+}
+
+export function isAnswered(answer: Answer | undefined): answer is Answer {
+  if (!answer) {
+    return false;
   }
 
-  return answer.text.trim() !== "";
+  return answer.kind === "single-choice"
+    ? answer.optionId.length > 0
+    : answer.text.trim().length > 0;
 }
 
 export function countProgress(
@@ -77,9 +98,9 @@ export function countProgress(
   let filled = 0;
 
   for (const task of trainingSet.tasks) {
-    const answer = answers.find((item) => item.taskId === task.id);
+    const answer = getAnswer(answers, task.id);
 
-    if (answer !== undefined && isAnswerFilled(answer)) {
+    if (isAnswered(answer)) {
       filled = filled + 1;
     }
   }
