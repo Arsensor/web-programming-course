@@ -1,5 +1,7 @@
 import {
+  applyAttemptAction,
   countProgress,
+  createAttemptState,
   filterTasksByTopic,
   findTaskById,
   type Answer,
@@ -128,3 +130,50 @@ const answersAfter = JSON.stringify(answers);
 
 console.log("Набор не изменился:", setBefore === setAfter);
 console.log("Массив ответов не изменился:", answersBefore === answersAfter);
+
+let attempt = createAttemptState();
+attempt = applyAttemptAction(attempt, {
+  type: "answer-changed",
+  answer: {
+    taskId: "ts-1",
+    kind: "single-choice",
+    optionId: "b",
+  },
+});
+attempt = applyAttemptAction(attempt, {
+  type: "answer-changed",
+  answer: {
+    taskId: "react-1",
+    kind: "short-text",
+    text: "Props приходят снаружи.",
+  },
+});
+console.log("После двух ответов:", attempt.answers);
+
+attempt = applyAttemptAction(attempt, {
+  type: "answer-cleared",
+  taskId: "ts-1",
+});
+console.log("После очистки ts-1:", attempt.answers);
+
+attempt = applyAttemptAction(attempt, { type: "submitted" });
+const afterSubmit = applyAttemptAction(attempt, {
+  type: "answer-changed",
+  answer: {
+    taskId: "ts-1",
+    kind: "single-choice",
+    optionId: "a",
+  },
+});
+const afterClearSubmitted = applyAttemptAction(attempt, {
+  type: "answer-cleared",
+  taskId: "react-1",
+});
+console.log("После submitted ответы не меняются:", afterSubmit === attempt);
+console.log(
+  "Очистка после submitted тоже не меняет ответы:",
+  afterClearSubmitted.answers
+);
+
+const resetAttempt = applyAttemptAction(attempt, { type: "reset" });
+console.log("Новая попытка:", resetAttempt);

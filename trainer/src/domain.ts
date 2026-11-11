@@ -50,6 +50,13 @@ export type AttemptState = {
   status: AttemptStatus;
 };
 
+export type AttemptAction =
+  | { type: "answer-changed"; answer: Answer }
+  | { type: "answer-cleared"; taskId: string }
+  | { type: "moved"; index: number; taskCount: number }
+  | { type: "submitted" }
+  | { type: "reset" };
+
 export type FormEvent =
   | { type: "choose-option"; taskId: string; optionId: string }
   | { type: "change-text"; taskId: string; text: string };
@@ -106,4 +113,77 @@ export function countProgress(
   }
 
   return { filled, total };
+}
+
+export function createAttemptState(): AttemptState {
+  return {
+    currentIndex: 0,
+    answers: [],
+    status: "in-progress",
+  };
+}
+
+export function replaceAnswer(answers: Answer[], next: Answer): Answer[] {
+  return [...answers.filter((item) => item.taskId !== next.taskId), next];
+}
+
+export function clearAnswer(answers: Answer[], taskId: string): Answer[] {
+  return answers.filter((item) => item.taskId !== taskId);
+}
+
+export function clampIndex(index: number, taskCount: number): number {
+  const lastIndex = Math.max(taskCount - 1, 0);
+
+  if (index < 0) {
+    return 0;
+  }
+
+  if (index > lastIndex) {
+    return lastIndex;
+  }
+
+  return index;
+}
+
+export function applyAttemptAction(
+  state: AttemptState,
+  action: AttemptAction
+): AttemptState {
+  if (action.type === "reset") {
+    return createAttemptState();
+  }
+
+  if (action.type === "moved") {
+    return {
+      ...state,
+      currentIndex: clampIndex(action.index, action.taskCount),
+    };
+  }
+
+  if (state.status === "submitted") {
+    return state;
+  }
+
+  if (action.type === "answer-changed") {
+    return {
+      ...state,
+      answers: replaceAnswer(state.answers, action.answer),
+    };
+  }
+
+  if (action.type === "answer-cleared") {
+    return {
+      ...state,
+      answers: clearAnswer(state.answers, action.taskId),
+    };
+  }
+
+  if (action.type === "submitted") {
+    return {
+      ...state,
+      status: "submitted",
+    };
+  }
+
+  return state;
 }

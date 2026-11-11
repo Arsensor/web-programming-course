@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useReducer } from "react";
 import { TaskCard } from "./TaskCard";
 import { TaskList } from "./TaskList";
 import {
+  applyAttemptAction,
   countProgress,
+  createAttemptState,
   getAnswer,
   isAnswered,
   type Answer,
-  type AttemptStatus,
   type FormEvent,
   type TrainingSet,
 } from "./domain";
@@ -53,10 +54,6 @@ const trainingSet: TrainingSet = {
   ],
 };
 
-function replaceAnswer(current: Answer[], next: Answer): Answer[] {
-  return [...current.filter((item) => item.taskId !== next.taskId), next];
-}
-
 function answerText(answer: Answer | undefined): string {
   if (answer === undefined || !isAnswered(answer)) {
     return "нет ответа";
@@ -70,49 +67,49 @@ function answerText(answer: Answer | undefined): string {
 }
 
 export default function App() {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Answer[]>([]);
-  const [status, setStatus] = useState<AttemptStatus>("in-progress");
+  const [attempt, dispatch] = useReducer(applyAttemptAction, createAttemptState());
 
   const tasks = trainingSet.tasks;
-  const currentTask = tasks[currentIndex];
-  const progress = countProgress(trainingSet, answers);
+  const currentTask = tasks[attempt.currentIndex];
+  const progress = countProgress(trainingSet, attempt.answers);
   const skipped = tasks.filter(
-    (task) => !isAnswered(getAnswer(answers, task.id))
+    (task) => !isAnswered(getAnswer(attempt.answers, task.id))
   );
-  const submitted = status === "submitted";
+  const submitted = attempt.status === "submitted";
 
   function handleFormEvent(event: FormEvent) {
-    if (submitted) {
-      return;
-    }
-
     if (event.type === "choose-option") {
-      setAnswers((current) =>
-        replaceAnswer(current, {
+      dispatch({
+        type: "answer-changed",
+        answer: {
           taskId: event.taskId,
           kind: "single-choice",
           optionId: event.optionId,
-        })
-      );
+        },
+      });
       return;
     }
 
-    setAnswers((current) =>
-      replaceAnswer(current, {
+    dispatch({
+      type: "answer-changed",
+      answer: {
         taskId: event.taskId,
         kind: "short-text",
         text: event.text,
-      })
-    );
+      },
+    });
   }
 
-  function goBack() {
-    setCurrentIndex((index) => Math.max(index - 1, 0));
+  function clearTask(taskId: string) {
+    dispatch({ type: "answer-cleared", taskId });
   }
 
-  function goNext() {
-    setCurrentIndex((index) => Math.min(index + 1, tasks.length - 1));
+  function goTo(index: number) {
+    dispatch({
+      type: "moved",
+      index,
+      taskCount: tasks.length,
+    });
   }
 
   function finish() {
@@ -124,13 +121,7 @@ export default function App() {
       }
     }
 
-    setStatus("submitted");
-  }
-
-  function startNewAttempt() {
-    setAnswers([]);
-    setCurrentIndex(0);
-    setStatus("in-progress");
+    dispatch({ type: "submitted" });
   }
 
   return (
@@ -147,56 +138,80 @@ export default function App() {
           ? " нет"
           : " " + skipped.map((task) => task.id).join(", ")}
       </p>
+      <p>Статус попытки: {attempt.status}</p>
       <TaskList
         tasks={tasks}
-        disabled={submitted}
+        disabled={false}
         onSelect={(taskId) => {
           const index = tasks.findIndex((task) => task.id === taskId);
           if (index >= 0) {
-            setCurrentIndex(index);
+            goTo(index);
           }
         }}
       />
-      {submitted ? (
-        <section>
-          <h2>Обзор ответов</h2>
-          <ul>
-            {tasks.map((task) => (
-              <li key={task.id}>
-                {task.id}: {answerText(getAnswer(answers, task.id))}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : currentTask ? (
+      {currentTask ? (
         <TaskCard
           task={currentTask}
-          answer={getAnswer(answers, currentTask.id)}
-          disabled={false}
+          answer={getAnswer(attempt.answers, currentTask.id)}
+          disabled={submitted}
           onFormEvent={handleFormEvent}
         />
       ) : (
         <p>Нет выбранного задания.</p>
       )}
       <p>
-        Задание {currentIndex + 1} из {tasks.length}
+        Задание {attempt.currentIndex + 1} из {tasks.length}
       </p>
-      <button type="button" onClick={goBack} disabled={currentIndex === 0 || submitted}>
+      {!submitted && currentTask ? (
+        <button type="button" onClick={() => clearTask(currentTask.id)}>
+          Очистить ответ в карточке
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => goTo(attempt.currentIndex - 1)}
+        disabled={attempt.currentIndex === 0}
+      >
         Назад
       </button>
       <button
         type="button"
-        onClick={currentIndex === tasks.length - 1 ? finish : goNext}
-        disabled={submitted}
+        onClick={() => goTo(attempt.currentIndex + 1)}
+        disabled={attempt.currentIndex === tasks.length - 1}
       >
-        {currentIndex === tasks.length - 1 ? "К обзору" : "Далее"}
+        Далее
       </button>
-      <button type="button" onClick={finish} disabled={submitted}>
-        Завершить
-      </button>
-      <button type="button" onClick={startNewAttempt}>
+      {!submitted ? (
+        <button type="button" onClick={finish}>
+          Завершить
+        </button>
+      ) : null}
+      <button type="button" onClick={() => dispatch({ type: "reset" })}>
         Новая попытка
       </button>
+      <section>
+        <h2>Обзор ответов</h2>
+        <p>
+          {submitted
+            ? "Попытка завершена. Ответы можно только просматривать."
+            : "До завершения можно смотреть и очищать ответы всей попытки."}
+        </p>
+        <ul>
+          {tasks.map((task) => (
+            <li key={task.id}>
+              {task.id}: {answerText(getAnswer(attempt.answers, task.id))}
+              {!submitted ? (
+                <>
+                  {" "}
+                  <button type="button" onClick={() => clearTask(task.id)}>
+                    Очистить
+                  </button>
+                </>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </section>
     </main>
   );
 }
