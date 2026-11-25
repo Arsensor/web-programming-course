@@ -55,7 +55,30 @@ export type AttemptAction =
   | { type: "answer-cleared"; taskId: string }
   | { type: "moved"; index: number; taskCount: number }
   | { type: "submitted" }
+  | { type: "restored"; answers: Answer[]; status: AttemptStatus }
   | { type: "reset" };
+
+export type ResultItemStatus =
+  | "correct"
+  | "incorrect"
+  | "unanswered"
+  | "pending-review";
+
+export type ResultItem = {
+  taskId: string;
+  status: ResultItemStatus;
+  score: number | null;
+  maxScore: number;
+  feedback: string;
+};
+
+export type AttemptResult = {
+  attemptId: string;
+  status: "graded" | "pending-review";
+  score: number | null;
+  maxScore: number;
+  items: ResultItem[];
+};
 
 export type FormEvent =
   | { type: "choose-option"; taskId: string; optionId: string }
@@ -85,6 +108,29 @@ export function getAnswer(
   taskId: string
 ): Answer | undefined {
   return answers.find((item) => item.taskId === taskId);
+}
+
+export function answersEqual(
+  left: Answer | undefined,
+  right: Answer | undefined
+): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+
+  if (left.taskId !== right.taskId || left.kind !== right.kind) {
+    return false;
+  }
+
+  if (left.kind === "single-choice" && right.kind === "single-choice") {
+    return left.optionId === right.optionId;
+  }
+
+  if (left.kind === "short-text" && right.kind === "short-text") {
+    return left.text === right.text;
+  }
+
+  return false;
 }
 
 export function isAnswered(answer: Answer | undefined): answer is Answer {
@@ -151,6 +197,14 @@ export function applyAttemptAction(
 ): AttemptState {
   if (action.type === "reset") {
     return createAttemptState();
+  }
+
+  if (action.type === "restored") {
+    return {
+      currentIndex: 0,
+      answers: action.answers,
+      status: action.status,
+    };
   }
 
   if (action.type === "moved") {

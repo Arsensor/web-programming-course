@@ -1,4 +1,4 @@
-import type { Answer, FormEvent, Task } from "./domain";
+import type { Answer, FormEvent, Task } from "../domain";
 
 type AnswerFieldProps = {
   task: Task;

@@ -1,5 +1,5 @@
+import type { Answer, FormEvent, Task } from "../domain";
 import { AnswerField } from "./AnswerField";
-import type { Answer, FormEvent, Task } from "./domain";
 
 type TaskCardProps = {
   task: Task;
